@@ -1,0 +1,150 @@
+trigger:
+- master
+pr:
+  branches:
+    include:
+    - '*'  
+
+schedules:
+- cron: "0 0 * * *"
+  displayName: Daily midnight build
+  branches:
+    include: 
+    - master
+  always: "true"
+
+
+
+variables:
+- group: 'PrasannaLearnsAzure KeyVault'
+- name: vmImage 
+  value: 'windows-latest'
+   
+stages:
+- stage: Build
+  displayName: 'Build & Test Stage'
+  condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+  jobs:
+  - template: azure-pipelines-build-template.yml
+    parameters:
+      buildConfiguration: 'Release'
+      buildPlatform: 'Any CPU'
+      vmImage: $(vmImage)
+      clientSecret: $(AppSettings--ClientSecretDev)
+      redisCacheConnectionString: $(AppSettings--RedisCacheConnectionStringDev)
+      storageAccountKey: '$(StorageAccountKeyData)'
+    
+
+- stage: DeployDev
+  displayName: 'Deploy Dev Stage'
+  condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+  dependsOn: Build
+  jobs:
+  - template: azure-pipelines-deployment-template.yml
+    parameters:
+      
+      environment: 'Dev'  
+      environmentLowercase: 'dev'
+      databaseLoginName: $(databaseLoginNameDev) 
+      databaseLoginPassword: $(databaseLoginPasswordDev)
+      databaseServerName: 'master-dev-eu-sqlserver'
+      frontDoorDomainName: 'devfd.samlearnsazure.com'
+      keyVaultClientId: '$(KeyVaultClientId)'
+      keyVaultClientSecret: '$(KeyVaultClientSecret)'
+      imagesStorageCDNURL: 'https://Prasannasapp-dev-eu-cdnendpoint.azureedge.net/'
+      imagesStorageURL: 'https://prasannasappsappdeveustorage.blob.core.windows.net/'
+      redisCacheConnectionString: '$(AppSettings--RedisCacheConnectionStringDev)'
+      resourceGroupName: 'PrasannaLearnsAzureDev'
+      resourceGroupLocation: 'eastus'
+      resourceGroupLocationShort: 'eu'
+      roleAssignmentId: 'b24988ac-6180-42a0-ab88-20f7382dd24c'
+      samsAppConnectionString: '$(ConnectionStrings--SamsAppConnectionStringDev)'
+      serviceName: 'Prasannasapp-dev-eu-service'
+      storageAccountName: 'prasannasappsappdeveustorage'
+      userPrincipalLogin: $(userPrincipalLogin)
+      vmImage: $(vmImage)
+      websiteName: 'samsapp-dev-eu-web'
+      websiteDomainName: 'dev.samlearnsazure.com'
+      websiteStagingUrl: 'https://samsapp-dev-eu-web-staging.azurewebsites.net/'
+      websiteUrl: 'https://samsapp-dev-eu-web.azurewebsites.net/'
+      
+
+- stage: DeployQA
+  displayName: 'Deploy QA Stage'
+  condition: and(succeeded(), eq(variables['Build.SourceBranchName'], 'master'))
+  dependsOn: DeployDev
+  jobs:
+  - template: azure-pipelines-deployment-template.yml
+    parameters:
+      environment: 'QA'  
+      environmentLowercase: 'qa'
+      keyVaultClientId: '$(KeyVaultClientId)'
+      keyVaultClientSecret: '$(KeyVaultClientSecret)'
+      imagesStorageCDNURL: 'https://prasanna-qa-eu-cdnendpoint.azureedge.net/'
+      imagesStorageURL: 'https://prasannasappqaeustorage.blob.core.windows.net/'
+      redisCacheConnectionString: '$(AppSettings--RedisCacheConnectionStringQA)'
+      resourceGroupName: 'prasannaLearnsAzureQA'
+      resourceGroupLocation: 'eastus'
+      resourceGroupLocationShort: 'eu'
+      roleAssignmentId: 'b24988ac-6180-42a0-ab88-20f7382dd24c'
+      samsAppConnectionString: '$(ConnectionStrings--prasannasAppConnectionStringQA)'
+      serviceName: 'prasannasapp-qa-eu-service'
+      serviceStagingUrl: 'https://prasannasapp-qa-eu-service-staging.azurewebsites.net/'
+      serviceUrl: 'https://prasannasapp-qa-eu-service.azurewebsites.net/'
+      service2Name: 'prasannasapp-qa2-eu-service'
+      service2StagingUrl: 'https://prasannasapp-qa2-eu-service-staging.azurewebsites.net/'
+      service2Url: 'https://prasannasapp-qa2-eu-service.azurewebsites.net/'
+      storageAccountName: 'prasannasappqaeustorage'
+      userPrincipalLogin: $(userPrincipalLogin)
+      vmImage: $(vmImage)
+      websiteName: 'prasannasapp-qa-eu-web'
+      websiteDomainName: 'qa.prasannalearnsazure.com'
+      websiteStagingUrl: 'https://prasannasapp-qa-eu-web-staging.azurewebsites.net/'
+      websiteUrl: 'https://prasannasapp-qa-eu-web.azurewebsites.net/'
+      
+- stage: DeployProd
+  displayName: 'Deploy Prod Stage'
+  condition: and(succeeded(), eq(variables['Build.SourceBranchName'], 'master'))
+  dependsOn: DeployQA
+  jobs:
+  - template: azure-pipelines-deployment-template.yml
+    parameters:
+      environment: 'Prod'  
+      environmentLowercase: 'prod'
+      keyVaultClientId: '$(KeyVaultClientId)'
+      keyVaultClientSecret: '$(KeyVaultClientSecret)'
+      imagesStorageCDNURL: 'https://prasannasapp-prod-eu-cdnendpoint.azureedge.net/'
+      imagesStorageURL: 'https://prasannasappprodeustorage.blob.core.windows.net/'
+      redisCacheConnectionString: '$(AppSettings--RedisCacheConnectionStringProd)'
+      resourceGroupName: 'prasannaLearnsAzureProd'
+      resourceGroupLocation: 'eastus'
+      resourceGroupLocationShort: 'eu'
+      roleAssignmentId: 'b24988ac-6180-42a0-ab88-20f7382dd24c'
+      samsAppConnectionString: '$(ConnectionStrings--SamsAppConnectionStringProd)'
+      serviceName: 'prasannasapp-prod-eu-service'
+      serviceStagingUrl: 'https://prasanna-prod-eu-service-staging.azurewebsites.net/'
+      serviceUrl: 'https://prasanna-prod-eu-service.azurewebsites.net/'
+      service2Name: 'prasanna-prod2-eu-service'
+      service2StagingUrl: 'https://prasanna-prod2-eu-service-staging.azurewebsites.net/'
+      service2Url: 'https://prasanna-prod2-eu-service.azurewebsites.net/'
+      storageAccountName: 'prasannaprodeustorage'
+      userPrincipalLogin: $(userPrincipalLogin)
+      vmImage: $(vmImage)
+      websiteName: 'prasanna-prod-eu-web'
+      websiteDomainName: 'samlearnsazure.com'
+      websiteStagingUrl: 'https://prasanna-prod-eu-web-staging.azurewebsites.net/'
+      websiteUrl: 'https://prasanna-prod-eu-web.azurewebsites.net/'  
+      jobs:  
+  - job: waitForValidation
+    displayName: Wait for external validation  
+    pool: server    
+    timeoutInMinutes: 4320 
+    steps:   
+    - task: ManualValidation@0
+      timeoutInMinutes: 1440 
+      inputs:
+        notifyUsers: |
+          test@test.com
+          Prasanna@example.com
+        instructions: 'Please validate the build configuration and resume'
+        onTimeout: 'resume'

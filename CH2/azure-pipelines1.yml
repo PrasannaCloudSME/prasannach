@@ -1,0 +1,35 @@
+trigger:
+- master
+
+pool:
+  vmimage: 'Ubuntu-latest'
+
+task: Terraform
+TaskV1@0 
+inputs:
+     provider: 'azurerm'
+
+     command: 'init'
+
+     workingDirectory: 'StorageAccount-Terraform'
+
+     backendServiceArm: 'Prasanna_subscription'
+
+     backendAzureRmResourceGroupName: 'prasademo-rg'
+
+     backendAzureRmStorageAccountName: 'prasademostrg123456'
+
+     backendAzureRmContainerName: 'Prasannablob123'
+
+     backendAzureRmKey: 'tf/terraform.tfstate'
+
+task: Terraform
+TaskV1@0 
+inputs:
+     provider: 'azurerm'
+
+     command: 'apply'
+
+     workingDirectory: 'StorageAccount-Terraform'
+
+     environmentServiceNameAzureRM: 'your_subscription'

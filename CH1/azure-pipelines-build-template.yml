@@ -1,0 +1,197 @@
+parameters: # defaults for any parameters that aren't specified
+  buildConfiguration: 'Release'
+  buildPlatform: 'Any CPU'
+  vmImage: 'windows-latest'
+  clientSecret: '***secret'
+  redisCacheConnectionString: '***secret'
+  storageAccountKey: '***secret'
+
+jobs:
+  - job: BuildDotNet3
+    displayName: 'Build .NET 3 apps'
+    pool:
+      vmImage: ${{parameters.vmImage}}
+    variables:
+      buildNumber: '1.0.0.0'
+    steps:
+    - task: prasanna.DisplayAllVariables.DisplayAllVariables.prasannaAllVariables@1
+      displayName: 'Show all build variables in build output.'
+    - task: PowerShell@2
+      displayName: 'Generate build version number'
+      inputs:
+        targetType: FilePath
+        filePath: prasanna/BuildVersion.ps1
+        arguments: -ProjectFile "prasanna/prasanna.Web/prasanna.Web.csproj"
+    - task: SonarSource.sonarcloud.14d9cde6-c1da-4d55-aa01-2965cd301255.SonarCloudPrepare@1
+      displayName: 'Prepare analysis on SonarCloud'
+      inputs:
+        SonarCloud: 'SonarQube connection'
+        organization: prasannaorg
+        projectKey: prasannaAzure
+    - task: DotNetCoreCLI@2
+      displayName: 'Restore dotnet 3 projects'
+      inputs:
+        command: restore
+        projects: |
+         prasanna/prasanna.Service/prasanna.Service.csproj
+         prasanna/prasanna.Web/prasanna.Web.csproj
+        vstsFeed: '030a758a-428f-4445-bce8-2c19ad9a56b3'
+    - task: DotNetCoreCLI@2
+      displayName: 'Publish dotnet 3 projects'
+      inputs:
+        command: publish
+        publishWebProjects: false
+        projects: |
+         prasanna/prasanna.Service/prasanna.Service.csproj
+         prasanna/prasanna.Web/prasanna.Web.csproj
+        arguments: '--configuration ${{parameters.buildConfiguration}} --output $(build.artifactstagingdirectory) -p:Version=$(buildNumber) --self-contained true --runtime win-x86'
+        zipAfterPublish: true
+    - task: SonarSource.sonarcloud.ce096e50-6155-4de8-8800-4221aaeed4a1.SonarCloudAnalyze@1
+      displayName: 'Run Code Analysis on SonarCloud'
+      enabled: true
+    - task: SonarSource.sonarcloud.38b27399-a642-40af-bb7d-9971f69712e8.SonarCloudPublish@1
+      displayName: 'Publish Quality Gate Result on SonarCloud'
+      enabled: true
+    # Run security tasks
+    - task: ms-codeanalysis.vss-microsoft-security-code-analysis-devops.build-task-credscan.CredScan@2
+      displayName: 'Run CredScan'
+      inputs:
+        suppressionsFile: prasanna/CredScan/CredScanSuppressions.json
+      enabled: false
+    - task: WhiteSource Bolt@19
+      enabled: true
+    #Confirm that security tasks passed successfully before finalizing the build
+    - task: ms-codeanalysis.vss-microsoft-security-code-analysis-devops.build-task-postanalysis.PostAnalysis@1
+      displayName: 'Post Analysis'
+      inputs:
+        CredScan: true
+      enabled: false
+    - task: PublishBuildArtifacts@1
+      displayName: 'Publish Artifact'
+      inputs:
+        PathtoPublish: '$(build.artifactstagingdirectory)'
+
+
+  
+
+
+  - job: BuildUnitTest
+    displayName: 'Run unit tests'
+    pool:
+      vmImage: ${{parameters.vmImage}}
+    variables:
+      buildNumber: '1.0.0.0'
+    steps:
+    - task: DotNetCoreCLI@2
+      displayName: 'Restore dotnet 5 projects'
+      inputs:
+        command: restore
+        projects: |
+         prasanna/prasanna.Tests/prasanna.Tests.csproj
+        vstsFeed: '030a758a-428f-4445-bce8-2c19ad9a56b3'
+    - powershell: |  
+        $pathToJson = "prasanna/prasanna.Tests/appsettings.json"
+        $a = Get-Content $pathToJson | ConvertFrom-Json
+        $a.AppSettings.ClientSecret = "${{parameters.clientSecret}}"
+        $a.AppSettings.RedisCacheConnectionString = "${{parameters.redisCacheConnectionString}}"
+        $a | ConvertTo-Json | set-content $pathToJson   
+    - task: DotNetCoreCLI@2
+      displayName: 'Test dotnet 5 projects'
+      inputs:
+        command: test
+        projects: |
+         prasanna/prasanna.Tests/prasanna.Tests.csproj
+        arguments: '--configuration ${{parameters.buildConfiguration}} --filter TestCategory=UnitTest --logger trx --collect "Code coverage" --settings:$(Build.SourcesDirectory)\SamLearnsAzure\SamLearnsAzure.Tests\CodeCoverage.runsettings'
+        vstsFeed: '030a758a-428f-4445-bce8-2c19ad9a56b3' 
+      enabled: true
+
+  - job: BuildServiceAIntegrationTest
+    displayName: 'Service int tests part A'
+    pool:
+      vmImage: ${{parameters.vmImage}}
+    variables:
+      buildNumber: '1.0.0.0'
+    steps:
+    - task: DotNetCoreCLI@2
+      displayName: 'Restore dotnet 5 projects'
+      inputs:
+        command: restore
+        projects: |
+         prasanna/prasanna.Tests/prasanna.Tests.csproj
+        vstsFeed: '030a758a-428f-4445-bce8-2c19ad9a56b3'
+    - powershell: |  
+        $pathToJson = "prasanna/prasanna.Tests/appsettings.json"
+        $a = Get-Content $pathToJson | ConvertFrom-Json
+        $a.AppSettings.ClientSecret = "${{parameters.clientSecret}}"
+        $a.AppSettings.RedisCacheConnectionString = "${{parameters.redisCacheConnectionString}}"
+        $a | ConvertTo-Json | set-content $pathToJson   
+    - task: DotNetCoreCLI@2
+      displayName: 'Test dotnet 5 projects'
+      inputs:
+        command: test
+        projects: |
+         prasanna/prasanna.Tests/prasanna.Tests.csproj
+        arguments: '--configuration ${{parameters.buildConfiguration}} --filter TestCategory=ServiceIntegrationTestA --logger trx --collect "Code coverage" --settings:$(Build.SourcesDirectory)\SamLearnsAzure\SamLearnsAzure.Tests\CodeCoverage.runsettings'
+        vstsFeed: '030a758a-428f-4445-bce8-2c19ad9a56b3' 
+      enabled: true
+
+  - job: BuildServiceBIntegrationTest
+    displayName: 'Service int tests part B'
+    pool:
+      vmImage: ${{parameters.vmImage}}
+    variables:
+      buildNumber: '1.0.0.0'
+    steps:
+    - task: DotNetCoreCLI@2
+      displayName: 'Restore dotnet 5 projects'
+      inputs:
+        command: restore
+        projects: |
+         prasanna/prasanna.Tests/prasanna.Tests.csproj
+        vstsFeed: '030a758a-428f-4445-bce8-2c19ad9a56b3'
+    - powershell: |  
+        $pathToJson = "prasanna/prasanna.Tests/appsettings.json"
+        $a = Get-Content $pathToJson | ConvertFrom-Json
+        $a.AppSettings.ClientSecret = "${{parameters.clientSecret}}"
+        $a.AppSettings.RedisCacheConnectionString = "${{parameters.redisCacheConnectionString}}"
+        $a | ConvertTo-Json | set-content $pathToJson   
+    - task: DotNetCoreCLI@2
+      displayName: 'Test dotnet 5 projects'
+      inputs:
+        command: test
+        projects: |
+         prasanna/prasanna.Tests/prasanna.Tests.csproj
+        arguments: '--configuration ${{parameters.buildConfiguration}} --filter TestCategory=ServiceIntegrationTestB --logger trx --collect "Code coverage" --settings:$(Build.SourcesDirectory)\SamLearnsAzure\SamLearnsAzure.Tests\CodeCoverage.runsettings'
+        vstsFeed: '030a758a-428f-4445-bce8-2c19ad9a56b3' 
+      enabled: true
+
+  - job: BuildWebIntegrationTest
+    displayName: 'Website integration tests'
+    pool:
+      vmImage: ${{parameters.vmImage}}
+    variables:
+      buildNumber: '1.0.0.0'
+    steps:
+    - task: DotNetCoreCLI@2
+      displayName: 'Restore dotnet 5 projects'
+      inputs:
+        command: restore
+        projects: |
+         prasanna/prasanna.Tests/prasanna.Tests.csproj
+        vstsFeed: '030a758a-428f-4445-bce8-2c19ad9a56b3'
+    - powershell: |  
+        $pathToJson = "prasanna/prasanna.Tests/appsettings.json"
+        $a = Get-Content $pathToJson | ConvertFrom-Json
+        $a.AppSettings.ClientSecret = "${{parameters.clientSecret}}"
+        $a.AppSettings.RedisCacheConnectionString = "${{parameters.redisCacheConnectionString}}"
+        $a | ConvertTo-Json | set-content $pathToJson   
+    - task: DotNetCoreCLI@2
+      displayName: 'Test dotnet 3 projects'
+      inputs:
+        command: test
+        projects: |
+         prasanna/prasanna.Tests/prasanna.Tests.csproj
+        arguments: '--configuration ${{parameters.buildConfiguration}} --filter TestCategory=WebIntegrationTest --logger trx --collect "Code coverage" --settings:$(Build.SourcesDirectory)\SamLearnsAzure\SamLearnsAzure.Tests\CodeCoverage.runsettings'
+        vstsFeed: '030a758a-428f-4445-bce8-2c19ad9a56b3' 
+      enabled: false
+
