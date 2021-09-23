@@ -1,0 +1,38 @@
+1) What are different artifacts you need to create - name of the artifacts and its purpose
+
+With Azure DevOps, we can share packages across all projects Examples Like Maven, npm, NuGet, and Python package
+1. a NuGet package is a single ZIP file with the .nupkg extension that contains compiled code (DLLs), other files related to that code, and a descriptive manifest that includes information like the package's version number
+2. npm is a package manager for the JavaScript programming language maintained by npm
+3. Maven is a build automation tool used primarily for Java projects.
+
+2) List the tools you will to create and store the Terraform templates.
+
+Visual studio code can be used for creating the Terraform templates.
+Storing Terraform templates can used in GIT, GitHub, GitLab Version Control 
+
+3) Explain the process and steps to create automated deployment pipeline.
+Git repositories for source control.
+Build and Release pipelines for CI/CD automation.
+Agile tools covering Kanban/scrum project methodologies.
+Continuous Integration-Continuous integration is the process of automating builds and testing that occur as the code is completed and committed to the system
+Continuous Delivery-
+Continuous Delivery is the ability to get changes of all types—including new features, configuration changes, bug fixes and experiments
+Continuous Deployment-Continuous Deployment, your application is run through an automated pipeline workflow. 
+4) Create a sample Terraform template you will use to deploy Below services:
+Please find the Terraform Templates added in the folder
+Vnet
+2 Subnet
+NSG to open port 80 and 443
+1 Window VM in each subnet
+1 Storage account
+5) Explain how you will access the password stored in Key Vault and use it as Admin Password in the VM
+Azure Key Vault Secrets Data Source
+Create Key Vault Secret data sources for each of the secrets you require.
+Key Vault Secret Data Source
+data "azurerm_key_vault_secret" "Prasanna-admin-login-password" {
+  name         = "Vm -admin-password"
+  key_vault_id = data.azurerm_key_vault.prasanna.id
+}
+output "secret_value" {
+  value = data.azurerm_key_vault_secret.ufo-admin-login-password.value
+}
